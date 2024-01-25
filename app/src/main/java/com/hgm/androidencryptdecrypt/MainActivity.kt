@@ -1,5 +1,6 @@
 package com.hgm.androidencryptdecrypt
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,11 +17,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.datastore.dataStore
 import com.hgm.androidencryptdecrypt.ui.theme.AndroidEncryptDecryptTheme
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -30,23 +35,26 @@ import java.io.FileOutputStream
  **/
 class MainActivity : ComponentActivity() {
 
-      private val cryptoManager by lazy {
-            CryptoManager()
-      }
+      private val Context.dataStore by dataStore(
+            fileName = "user-info.json",
+            serializer = UserInfoSerializer(CryptoManager())
+      )
 
       @OptIn(ExperimentalMaterial3Api::class)
       override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             setContent {
                   AndroidEncryptDecryptTheme {
-                        // 明文
-                        var plainText by remember {
+                        var username by remember {
                               mutableStateOf("")
                         }
-                        // 密文
-                        var cipherText by remember {
+                        var password by remember {
                               mutableStateOf("")
                         }
+                        var info by remember {
+                              mutableStateOf("")
+                        }
+                        val scope = rememberCoroutineScope()
 
 
                         Column(
@@ -59,10 +67,16 @@ class MainActivity : ComponentActivity() {
                               )
                         ) {
                               OutlinedTextField(
-                                    value = plainText,
-                                    onValueChange = { plainText = it },
+                                    value = username,
+                                    onValueChange = { username = it },
                                     modifier = Modifier.fillMaxWidth(),
-                                    placeholder = { Text(text = "输入需要的内容...") }
+                                    placeholder = { Text(text = "用户名") }
+                              )
+                              OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    placeholder = { Text(text = "密码") }
                               )
 
                               Row(
@@ -74,32 +88,27 @@ class MainActivity : ComponentActivity() {
                                     )
                               ) {
                                     Button(onClick = {
-                                          // 把明文转为字节数组
-                                          val bytes = plainText.encodeToByteArray()
-                                          // 创建文件对象用于存储加密结果
-                                          val file = File(filesDir, "secret.txt")
-                                          // 检查文件存在性
-                                          if (!file.exists()) {
-                                                file.createNewFile()
+                                          scope.launch {
+                                                dataStore.updateData {
+                                                      UserInfo(
+                                                            username = username,
+                                                            password = password
+                                                      )
+                                                }
                                           }
-                                          // 文件输出流
-                                          val fos = FileOutputStream(file)
-                                          // 调用加密函数，接收密文
-                                          cipherText = cryptoManager.encrypt(bytes, fos).decodeToString()
                                     }) {
-                                          Text(text = "加密")
+                                          Text(text = "保存")
                                     }
                                     Button(onClick = {
-                                          // 创建文件对象
-                                          val file = File(filesDir, "secret.txt")
-                                          // 调用解密函数，接收文件输入流并转换为明文
-                                          plainText = cryptoManager.decrypt(FileInputStream(file)).decodeToString()
+                                          scope.launch {
+                                                info = dataStore.data.first().toString()
+                                          }
                                     }) {
-                                          Text(text = "解密")
+                                          Text(text = "读取")
                                     }
                               }
 
-                              Text(text = "加密后：$cipherText")
+                              Text(text = info)
                         }
                   }
             }
